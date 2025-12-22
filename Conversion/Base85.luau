@@ -2,7 +2,7 @@
 --!native
 --!strict
 
-local P1, P2, P3, P4 = 85, 7225, 614125, 52200625
+local POW1, POW2, POW3, POW4 = 85, 7225, 614125, 52200625
 
 local ENC_LUT_HI = buffer.create(14000) 
 local ENC_LUT_LO = buffer.create(30000)
@@ -28,8 +28,8 @@ for c1 = 0, 255 do
 
 		local key = (c1 + c2 * 256) * 4
 
-		buffer.writeu32(DECODE_A, key, v1 * P4 + v2 * P3 - 33)
-		buffer.writeu32(DECODE_B, key, v1 * P2 + v2 * P1)
+		buffer.writeu32(DECODE_A, key, v1 * POW4 + v2 * POW3 - 33)
+		buffer.writeu32(DECODE_B, key, v1 * POW2 + v2 * POW1)
 	end
 end
 
@@ -53,43 +53,37 @@ local function Encode(Input: buffer): buffer
 		local W4 = bit32.byteswap(buffer.readu32(Input, i + 12))
 
 		local P1_1 = W1 // 614125
-		local R1_1 = W1 - P1_1 * 614125
 		local P1_2 = W2 // 614125
-		local R1_2 = W2 - P1_2 * 614125
 		local P1_3 = W3 // 614125
-		local R1_3 = W3 - P1_3 * 614125
 		local P1_4 = W4 // 614125
+		
+		local R1_1 = W1 - P1_1 * 614125
+		local R1_2 = W2 - P1_2 * 614125
+		local R1_3 = W3 - P1_3 * 614125
 		local R1_4 = W4 - P1_4 * 614125
-
+		
 		local P2_1 = R1_1 // 85
 		local P2_2 = R1_2 // 85
 		local P2_3 = R1_3 // 85
 		local P2_4 = R1_4 // 85
 
-		local ValHi1 = buffer.readu16(LutHi, P1_1 * 2)
-		local ValLo1 = buffer.readu32(LutLo, P2_1 * 4)
-		buffer.writeu32(Output, OutIdx, ValHi1 + ValLo1)
-		buffer.writeu8(Output, OutIdx + 4, (R1_1 - P2_1 * 85) + 33)
+		buffer.writeu32(Output, OutIdx, buffer.readu16(LutHi, P1_1 * 2) + buffer.readu32(LutLo, P2_1 * 4))
+		buffer.writeu8(Output, OutIdx + 4, R1_1 - P2_1 * 85 + 33)
 
-		local ValHi2 = buffer.readu16(LutHi, P1_2 * 2)
-		local ValLo2 = buffer.readu32(LutLo, P2_2 * 4)
-		buffer.writeu32(Output, OutIdx + 5, ValHi2 + ValLo2)
-		buffer.writeu8(Output, OutIdx + 9, (R1_2 - P2_2 * 85) + 33)
+		buffer.writeu32(Output, OutIdx + 5, buffer.readu16(LutHi, P1_2 * 2) + buffer.readu32(LutLo, P2_2 * 4))
+		buffer.writeu8(Output, OutIdx + 9, R1_2 - P2_2 * 85 + 33)
 
-		local ValHi3 = buffer.readu16(LutHi, P1_3 * 2)
-		local ValLo3 = buffer.readu32(LutLo, P2_3 * 4)
-		buffer.writeu32(Output, OutIdx + 10, ValHi3 + ValLo3)
-		buffer.writeu8(Output, OutIdx + 14, (R1_3 - P2_3 * 85) + 33)
+		buffer.writeu32(Output, OutIdx + 10, buffer.readu16(LutHi, P1_3 * 2) + buffer.readu32(LutLo, P2_3 * 4))
+		buffer.writeu8(Output, OutIdx + 14, R1_3 - P2_3 * 85 + 33)
 
-		local ValHi4 = buffer.readu16(LutHi, P1_4 * 2)
-		local ValLo4 = buffer.readu32(LutLo, P2_4 * 4)
-		buffer.writeu32(Output, OutIdx + 15, ValHi4 + ValLo4)
-		buffer.writeu8(Output, OutIdx + 19, (R1_4 - P2_4 * 85) + 33)
+		buffer.writeu32(Output, OutIdx + 15, buffer.readu16(LutHi, P1_4 * 2) + buffer.readu32(LutLo, P2_4 * 4))
+		buffer.writeu8(Output, OutIdx + 19, R1_4 - P2_4 * 85 + 33)
 
 		OutIdx += 20
 	end
 
-	local InIdx = (OutIdx // 5) * 4
+	local InIdx = OutIdx // 5 * 4
+	
 	while InIdx <= Len - 4 do
 		local W = bit32.byteswap(buffer.readu32(Input, InIdx))
 		local P1 = W // 614125
@@ -97,34 +91,33 @@ local function Encode(Input: buffer): buffer
 		local P2 = R1 // 85
 
 		buffer.writeu32(Output, OutIdx, buffer.readu16(LutHi, P1 * 2) + buffer.readu32(LutLo, P2 * 4))
-		buffer.writeu8(Output, OutIdx + 4, (R1 - P2 * 85) + 33)
-
+		buffer.writeu8(Output, OutIdx + 4, R1 - P2 * 85 + 33)
+		
 		InIdx += 4
 		OutIdx += 5
 	end
 
 	if Rem > 0 then
-		local Val = 0
-		for i = 0, Rem - 1 do
-			Val = Val * 256 + buffer.readu8(Input, InIdx + i)
-		end
-
-		if Rem == 1 then
-			Val *= 16777216 
-		elseif Rem == 2 then
-			Val *= 65536
-		elseif Rem == 3 then
-			Val *= 256
+		local Val = buffer.readu8(Input, InIdx)
+		if Rem > 1 then
+			Val = Val * 256 + buffer.readu8(Input, InIdx + 1)
+			if Rem > 2 then
+				Val = Val * 256 + buffer.readu8(Input, InIdx + 2)
+				Val *= 256
+			else
+				Val *= 65536
+			end
+		else
+			Val *= 16777216
 		end
 
 		local P1 = Val // 614125
 		local R1 = Val - P1 * 614125
-		local P2 = R1 // 85
-
-		local Part2 = buffer.readu32(LutLo, P2 * 4)
+		
 		buffer.writeu16(Output, OutIdx, buffer.readu16(LutHi, P1 * 2))
 		if Rem > 1 then
-			buffer.writeu8(Output, OutIdx + 2, (Part2 // 65536) % 256)
+			local Part2 = buffer.readu32(LutLo, R1 // 85 * 4)
+			buffer.writeu8(Output, OutIdx + 2, Part2 // 65536 % 256)
 			if Rem > 2 then
 				buffer.writeu8(Output, OutIdx + 3, Part2 // 16777216)
 			end
@@ -144,84 +137,59 @@ local function Decode(Input: buffer): buffer
 	local OutIdx = 0
 	local UnrollLimit = Len - 20
 
-	local DecA, DecB = DECODE_A, DECODE_B
+	local DecA = DECODE_A
+	local DecB = DECODE_B
 
 	for i = 0, UnrollLimit, 20 do
+		local Key00 = buffer.readu16(Input, i) * 4
+		local Key01 = buffer.readu16(Input, i + 2) * 4
+		local Key10 = buffer.readu16(Input, i + 5) * 4
+		local Key11 = buffer.readu16(Input, i + 7) * 4
+		local Key20 = buffer.readu16(Input, i + 10) * 4
+		local Key21 = buffer.readu16(Input, i + 12) * 4
+		local Key30 = buffer.readu16(Input, i + 15) * 4
+		local Key31 = buffer.readu16(Input, i + 17) * 4
+
 		buffer.writeu32(Output, OutIdx, bit32.byteswap(
-			buffer.readu32(DecA, buffer.readu16(Input, i) * 4)
-				+ buffer.readu32(DecB, buffer.readu16(Input, i + 2) * 4)
-				+ buffer.readu8(Input, i + 4))
-		)
+			buffer.readu32(DecA, Key00) + buffer.readu32(DecB, Key01) + buffer.readu8(Input, i + 4)))
 
 		buffer.writeu32(Output, OutIdx + 4, bit32.byteswap(
-			buffer.readu32(DecA, buffer.readu16(Input, i + 5) * 4)
-				+ buffer.readu32(DecB, buffer.readu16(Input, i + 7) * 4)
-				+ buffer.readu8(Input, i + 9))
-		)
+			buffer.readu32(DecA, Key10) + buffer.readu32(DecB, Key11) + buffer.readu8(Input, i + 9)))
 
 		buffer.writeu32(Output, OutIdx + 8, bit32.byteswap(
-			buffer.readu32(DecA, buffer.readu16(Input, i + 10) * 4)
-				+ buffer.readu32(DecB, buffer.readu16(Input, i + 12) * 4)
-				+ buffer.readu8(Input, i + 14))
-		)
+			buffer.readu32(DecA, Key20) + buffer.readu32(DecB, Key21) + buffer.readu8(Input, i + 14)))
 
 		buffer.writeu32(Output, OutIdx + 12, bit32.byteswap(
-			buffer.readu32(DecA, buffer.readu16(Input, i + 15) * 4) 
-				+ buffer.readu32(DecB, buffer.readu16(Input, i + 17) * 4) 
-				+ buffer.readu8(Input, i + 19))
-		)
+			buffer.readu32(DecA, Key30) + buffer.readu32(DecB, Key31) + buffer.readu8(Input, i + 19)))
 
 		OutIdx += 16
 	end
 
-	local InIdx = (OutIdx // 4) * 5
+	local InIdx = OutIdx // 4 * 5
 	while InIdx <= Len - 5 do
+		local Key0 = buffer.readu16(Input, InIdx) * 4
+		local Key1 = buffer.readu16(Input, InIdx + 2) * 4
+
 		buffer.writeu32(Output, OutIdx, bit32.byteswap(
-			buffer.readu32(DecA, buffer.readu16(Input, InIdx) * 4) 
-				+ buffer.readu32(DecB, buffer.readu16(Input, InIdx + 2) * 4)
-				+ buffer.readu8(Input, InIdx + 4))
-		)
+			buffer.readu32(DecA, Key0) + buffer.readu32(DecB, Key1) + buffer.readu8(Input, InIdx + 4)))
 
 		InIdx += 5
 		OutIdx += 4
 	end
 
-	if InIdx < Len then
-		local CharsLeft = Len - InIdx
-		local Sum = 0
+	if Rem > 0 then
+		local C0 = buffer.readu8(Input, InIdx) - 33
+		local C1 = if Rem > 1 then buffer.readu8(Input, InIdx + 1) - 33 else 84
+		local C2 = if Rem > 2 then buffer.readu8(Input, InIdx + 2) - 33 else 84
+		local C3 = if Rem > 3 then buffer.readu8(Input, InIdx + 3) - 33 else 84
 
-		for i = 0, CharsLeft - 1 do
-			local char = buffer.readu8(Input, InIdx + i)
-			local val = char - 33
+		local Sum = C0 * POW4 + C1 * POW3 + C2 * POW2 + C3 * POW1 + 84
 
-			if i == 0 then
-				Sum += val * P4
-			elseif i == 1 then
-				Sum += val * P3
-			elseif i == 2 then
-				Sum += val * P2
-			elseif i == 3 then
-				Sum += val * P1
-			end
-		end
-
-		for i = CharsLeft, 4 do
-			if i == 1 then
-				Sum += 84 * P3
-			elseif i == 2 then
-				Sum += 84 * P2
-			elseif i == 3 then
-				Sum += 84 * P1
-			elseif i == 4 then
-				Sum += 84
-			end
-		end
-
-		buffer.writeu8(Output, OutIdx, bit32.extract(Sum, 24, 8))
-		if CharsLeft > 2 then
-			buffer.writeu8(Output, OutIdx + 1, bit32.extract(Sum, 16, 8))
-			if CharsLeft > 3 then
-				buffer.writeu8(Output, OutIdx + 2, bit32.extract(Sum, 8, 8))
+		buffer.writeu8(Output, OutIdx, bit32.rshift(Sum, 24))
+		if Rem > 2 then
+			buffer.writeu8(Output, OutIdx + 1, bit32.band(bit32.rshift(Sum, 16), 0xFF))
+			if Rem > 3 then
+				buffer.writeu8(Output, OutIdx + 2, bit32.band(bit32.rshift(Sum, 8), 0xFF))
 			end
 		end
 	end
