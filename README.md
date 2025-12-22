@@ -11,3 +11,6 @@ decompress(src: buffer, dstlen: number): buffer
 compress(src: buffer): buffer
 decompress(src: buffer): buffer
 ```
+
+# Future collections
+In the future, I could add like Ported Luau Parser 7.03 (rewritten), or LZ4 (collected in llz4), Base94 and Base85 (collected in devforum)
