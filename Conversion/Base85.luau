@@ -1,10 +1,6 @@
---!strict
 --!optimize 2
 --!native
-
--- This is incredibly fast because it based from the fastest Base64
--- https://github.com/daily3014/rbx-cryptography/blob/main/src/Utilities/Base64.luau
--- Base85 format: Acsii85
+--!strict
 
 local P1, P2, P3, P4 = 85, 7225, 614125, 52200625
 
@@ -24,19 +20,15 @@ end
 
 for c1 = 0, 255 do
 	local v1 = c1 - 33
-	if v1 < 0 or v1 > 84 then
-		continue
-	end
+	if v1 < 0 or v1 > 84 then continue end
 
 	for c2 = 0, 255 do
 		local v2 = c2 - 33
-		if v2 < 0 or v2 > 84 then
-			continue
-		end
+		if v2 < 0 or v2 > 84 then continue end
 
 		local key = (c1 + c2 * 256) * 4
-		
-		buffer.writeu32(DECODE_A, key, v1 * P4 + v2 * P3)
+
+		buffer.writeu32(DECODE_A, key, v1 * P4 + v2 * P3 - 33)
 		buffer.writeu32(DECODE_B, key, v1 * P2 + v2 * P1)
 	end
 end
@@ -48,18 +40,17 @@ local function Encode(Input: buffer): buffer
 	local Rem = Len % 4
 	local Output = buffer.create(Len // 4 * 5 + (if Rem > 0 then Rem + 1 else 0))
 
-	local InIdx = 0
 	local OutIdx = 0
 	local UnrollLimit = Len - 16
 
 	local LutHi = ENC_LUT_HI
 	local LutLo = ENC_LUT_LO
 
-	while InIdx <= UnrollLimit do
-		local W1 = bit32.byteswap(buffer.readu32(Input, InIdx))
-		local W2 = bit32.byteswap(buffer.readu32(Input, InIdx + 4))
-		local W3 = bit32.byteswap(buffer.readu32(Input, InIdx + 8))
-		local W4 = bit32.byteswap(buffer.readu32(Input, InIdx + 12))
+	for i = 0, UnrollLimit, 16 do
+		local W1 = bit32.byteswap(buffer.readu32(Input, i))
+		local W2 = bit32.byteswap(buffer.readu32(Input, i + 4))
+		local W3 = bit32.byteswap(buffer.readu32(Input, i + 8))
+		local W4 = bit32.byteswap(buffer.readu32(Input, i + 12))
 
 		local P1_1 = W1 // 614125
 		local R1_1 = W1 - P1_1 * 614125
@@ -95,10 +86,10 @@ local function Encode(Input: buffer): buffer
 		buffer.writeu32(Output, OutIdx + 15, ValHi4 + ValLo4)
 		buffer.writeu8(Output, OutIdx + 19, (R1_4 - P2_4 * 85) + 33)
 
-		InIdx += 16
 		OutIdx += 20
 	end
 
+	local InIdx = (OutIdx // 5) * 4
 	while InIdx <= Len - 4 do
 		local W = bit32.byteswap(buffer.readu32(Input, InIdx))
 		local P1 = W // 614125
@@ -133,9 +124,9 @@ local function Encode(Input: buffer): buffer
 		local Part2 = buffer.readu32(LutLo, P2 * 4)
 		buffer.writeu16(Output, OutIdx, buffer.readu16(LutHi, P1 * 2))
 		if Rem > 1 then
-			buffer.writeu8(Output, OutIdx + 2, bit32.extract(Part2, 16, 8))
+			buffer.writeu8(Output, OutIdx + 2, (Part2 // 65536) % 256)
 			if Rem > 2 then
-				buffer.writeu8(Output, OutIdx + 3, bit32.extract(Part2, 24, 8))
+				buffer.writeu8(Output, OutIdx + 3, Part2 // 16777216)
 			end
 		end
 	end
@@ -150,52 +141,46 @@ local function Decode(Input: buffer): buffer
 	local Rem = Len % 5
 	local Output = buffer.create((Len // 5) * 4 + (if Rem > 0 then Rem - 1 else 0))
 
-	local InIdx = 0
 	local OutIdx = 0
 	local UnrollLimit = Len - 20
 
 	local DecA, DecB = DECODE_A, DECODE_B
 
-	while InIdx <= UnrollLimit do
-		local W1 = buffer.readu32(Input, InIdx)
-		local W2 = buffer.readu32(Input, InIdx + 5)
-		local W3 = buffer.readu32(Input, InIdx + 10)
-		local W4 = buffer.readu32(Input, InIdx + 15)
+	for i = 0, UnrollLimit, 20 do
+		buffer.writeu32(Output, OutIdx, bit32.byteswap(
+			buffer.readu32(DecA, buffer.readu16(Input, i) * 4)
+				+ buffer.readu32(DecB, buffer.readu16(Input, i + 2) * 4)
+				+ buffer.readu8(Input, i + 4))
+		)
 
-		local C5_1 = buffer.readu8(Input, InIdx + 4)
-		local C5_2 = buffer.readu8(Input, InIdx + 9)
-		local C5_3 = buffer.readu8(Input, InIdx + 14)
-		local C5_4 = buffer.readu8(Input, InIdx + 19)
+		buffer.writeu32(Output, OutIdx + 4, bit32.byteswap(
+			buffer.readu32(DecA, buffer.readu16(Input, i + 5) * 4)
+				+ buffer.readu32(DecB, buffer.readu16(Input, i + 7) * 4)
+				+ buffer.readu8(Input, i + 9))
+		)
 
-		local T1 = buffer.readu32(DecA, bit32.band(W1, 0xFFFF) * 4) 
-			+ buffer.readu32(DecB, bit32.rshift(W1, 16) * 4) + C5_1 - 33
+		buffer.writeu32(Output, OutIdx + 8, bit32.byteswap(
+			buffer.readu32(DecA, buffer.readu16(Input, i + 10) * 4)
+				+ buffer.readu32(DecB, buffer.readu16(Input, i + 12) * 4)
+				+ buffer.readu8(Input, i + 14))
+		)
 
-		local T2 = buffer.readu32(DecA, bit32.band(W2, 0xFFFF) * 4) 
-			+ buffer.readu32(DecB, bit32.rshift(W2, 16) * 4) + C5_2 - 33
+		buffer.writeu32(Output, OutIdx + 12, bit32.byteswap(
+			buffer.readu32(DecA, buffer.readu16(Input, i + 15) * 4) 
+				+ buffer.readu32(DecB, buffer.readu16(Input, i + 17) * 4) 
+				+ buffer.readu8(Input, i + 19))
+		)
 
-		local T3 = buffer.readu32(DecA, bit32.band(W3, 0xFFFF) * 4) 
-			+ buffer.readu32(DecB, bit32.rshift(W3, 16) * 4) + C5_3 - 33
-
-		local T4 = buffer.readu32(DecA, bit32.band(W4, 0xFFFF) * 4) 
-			+ buffer.readu32(DecB, bit32.rshift(W4, 16) * 4) + C5_4 - 33
-
-		buffer.writeu32(Output, OutIdx, bit32.byteswap(T1))
-		buffer.writeu32(Output, OutIdx + 4, bit32.byteswap(T2))
-		buffer.writeu32(Output, OutIdx + 8, bit32.byteswap(T3))
-		buffer.writeu32(Output, OutIdx + 12, bit32.byteswap(T4))
-
-		InIdx += 20
 		OutIdx += 16
 	end
 
+	local InIdx = (OutIdx // 4) * 5
 	while InIdx <= Len - 5 do
-		local W = buffer.readu32(Input, InIdx)
-		
-		local T = buffer.readu32(DecA, bit32.band(W, 0xFFFF) * 4) 
-			+ buffer.readu32(DecB, bit32.rshift(W, 16) * 4)
-			+ buffer.readu8(Input, InIdx + 4) - 33
-		
-		buffer.writeu32(Output, OutIdx, bit32.byteswap(T))
+		buffer.writeu32(Output, OutIdx, bit32.byteswap(
+			buffer.readu32(DecA, buffer.readu16(Input, InIdx) * 4) 
+				+ buffer.readu32(DecB, buffer.readu16(Input, InIdx + 2) * 4)
+				+ buffer.readu8(Input, InIdx + 4))
+		)
 
 		InIdx += 5
 		OutIdx += 4
@@ -208,7 +193,7 @@ local function Decode(Input: buffer): buffer
 		for i = 0, CharsLeft - 1 do
 			local char = buffer.readu8(Input, InIdx + i)
 			local val = char - 33
-			
+
 			if i == 0 then
 				Sum += val * P4
 			elseif i == 1 then
