@@ -10,8 +10,6 @@ local BIT_MASK = {}
 local ENCODE_MAP = {}
 local DECODE_MAP = {}
 
-local Base93 = {}
-
 local j = 0 for i = 32, 127 do
 
 	if i ~= 34 and i ~= 92 then
@@ -30,8 +28,7 @@ for entry = 0, 8648 do
 	BIT_MASK[entry] = bit32.band(entry, 8191) > 456 and 13 or 14
 end
 
-function Base93.Encode(input: buffer): buffer
-
+local function Encode(input: buffer): buffer
 	local length = buffer.len(input)
 	local output = buffer.create(math.ceil(length * 1.3))
 
@@ -74,7 +71,7 @@ function Base93.Encode(input: buffer): buffer
 	return sliced
 end
 
-function Base93.Decode(Input: buffer): buffer
+local function Decode(Input: buffer): buffer
 	local InputLength = buffer.len(Input)
 	local output = buffer.create(InputLength * 0.9)
 
@@ -120,4 +117,7 @@ function Base93.Decode(Input: buffer): buffer
 	return sliced
 end
 
-return Base93
+return {
+	Encode = Encode,
+	Decode = Decode
+}
