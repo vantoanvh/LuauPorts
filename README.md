@@ -29,4 +29,4 @@ Decode(Input: buffer): buffer
 ```
 ---
 ### Note
-In the future, I could add like Ported Luau Parser 7.03 (rewritten), LZAV HI, or tANS.
+In the future, I could add like Ported Luau Parser 0.706 (rewritten), LZAV HI, or tANS.
