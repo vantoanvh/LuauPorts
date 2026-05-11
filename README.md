@@ -11,6 +11,14 @@ decompress(src: buffer, dstlen: number): buffer
 compress(src: buffer): buffer
 decompress(src: buffer): buffer
 ```
+- **[Zlib](https://en.wikipedia.org/wiki/Zlib)** is a data format and a lossless data compression software library created by Jean-loup Gailly and Mark Adler.
+```luau
+Compress(input: buffer, level: number): buffer
+Decompress(input: buffer): buffer
+
+Deflate(input: buffer, level: number): buffer
+Inflate(input: buffer): buffer
+```
 ## Conversion
 - **[Base85](https://en.wikipedia.org/wiki/Ascii85)** also called Acsii85, a binary-to-text encoding developed by Paul E.
 ```luau
@@ -28,5 +36,37 @@ Encode(Input: buffer): buffer
 Decode(Input: buffer): buffer
 ```
 ---
-### Note
-In the future, I could add like Ported Luau Parser 0.706 (rewritten), LZAV HI, or tANS.
+## Decoder
+- **[GIFs](https://en.wikipedia.org/wiki/Ascii85)** is a classic bitmap image format released on June 15, 1987.
+```luau
+DecodeGIF(Input: buffer): {
+	Animated: boolean,
+	Size: Vector2,
+	RGBA8: buffer,
+	Frame: buffer,
+	AdvanceFrame: () -> (),
+	Reset: () -> (),
+	Finished: boolean,
+	Delay: number
+}
+```
+- **[JPEG](https://en.wikipedia.org/wiki/JPEG)** is a commonly used method of lossy compression for digital images.
+```luau
+DecodeJPEG(Input: buffer): {
+	Size: Vector2,
+	RGBA8: OutputBuffer
+}
+```
+- **[PNG](https://en.wikipedia.org/wiki/PNG)** is a raster-graphics file format that supports lossless data compression.
+```luau
+DecodePNG(Input: buffer): {
+	Animated: boolean,
+	Size: Vector2,
+	RGBA8: buffer,
+	Frame: buffer,
+	AdvanceFrame: () -> (),
+	Reset: () -> (),
+	Finished: boolean,
+	Delay: number
+}
+```
